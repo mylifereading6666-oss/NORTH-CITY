@@ -10,13 +10,14 @@ scene.background=new THREE.Color(0x9bb8c7);
 scene.fog=new THREE.Fog(0x9bb8c7,180,650);
 const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,1400);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
-renderer.shadowMap.enabled=false;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 sceneHost.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xd9efff,0x52606a,2.0));
-const sun=new THREE.DirectionalLight(0xfff1d6,2.1);sun.position.set(-90,160,80);scene.add(sun);
+const sun=new THREE.DirectionalLight(0xfff1d6,2.1);sun.position.set(-90,160,80);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.near=1;sun.shadow.camera.far=500;sun.shadow.camera.left=-180;sun.shadow.camera.right=180;sun.shadow.camera.top=180;sun.shadow.camera.bottom=-180;scene.add(sun);
 
 const mat=(color,roughness=1)=>new THREE.MeshStandardMaterial({color,roughness});
 const groundMat=mat(0x687b70),roadMat=mat(0x303941),sideMat=mat(0x9ba6a9),buildingMats=[mat(0x9aa8b1),mat(0x758895),mat(0xb2b8b5),mat(0x667985),mat(0xc1b9a8)];
@@ -87,5 +88,5 @@ document.querySelector("#run").addEventListener("pointerdown",()=>running=true);
 document.querySelector("#reset-camera").addEventListener("click",()=>{yaw=0;pitch=.25;});
 const clock=new THREE.Clock();function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));const dir=forward.multiplyScalar(-moveZ).add(right.multiplyScalar(moveX));if(dir.lengthSq()>1)dir.normalize();const speed=running?9:4.2;player.position.addScaledVector(dir,speed*dt);if(dir.lengthSq()>.001)player.rotation.y=Math.atan2(dir.x,dir.z);jumpV-=15*dt;player.position.y+=jumpV*dt;if(player.position.y<=0){player.position.y=0;jumpV=0;onGround=true;}updateCamera();renderer.render(scene,camera);}
 animate();
-addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);});
+addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);});
 (async()=>{try{loadingText.textContent="OpenStreetMapから札幌の道路・建物を取得中...";const result=await loadOSM();let demCount=0;try{demCount=await loadTerrain();}catch(demError){console.warn("標高データを読み込めませんでした",demError);}statusEl.textContent=`道路 ${result.roads} / 建物 ${result.buildings} / 標高タイル ${demCount}`;document.querySelector("#coords").textContent="札幌駅周辺";}catch(e){console.warn(e);addFallbackStreet();statusEl.textContent="簡易マップ表示（地図データ未取得）";document.querySelector("#coords").textContent="札幌中心部・簡易表示";}finally{document.querySelector("#loading").classList.add("hidden");}})();
