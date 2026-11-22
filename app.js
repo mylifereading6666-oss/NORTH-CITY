@@ -25,10 +25,31 @@ const grid=new THREE.GridHelper(900,90,0x829b9f,0x829b9f);grid.position.y=-.38;g
 
 const metersLon= Math.cos(CENTER.lat*Math.PI/180)*111320;
 function project(lat,lon){return {x:(lon-CENTER.lon)*metersLon,z:-(lat-CENTER.lat)*111320};}
-function addRoad(points,width=6){if(points.length<2)return;const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(p.x,.03,p.z)));const geo=new THREE.TubeGeometry(curve,Math.max(8,points.length*3),width/2,5,false);const mesh=new THREE.Mesh(geo,roadMat);scene.add(mesh);}
-function addBuilding(way){const coords=way.geometry;if(!coords||coords.length<4)return;const pts=coords.map(p=>project(p.lat,p.lon));const center=pts.reduce((a,p)=>({x:a.x+p.x/pts.length,z:a.z+p.z/pts.length}),{x:0,z:0});const shape=new THREE.Shape();pts.forEach((p,i)=>{const x=p.x-center.x,z=p.z-center.z;i?shape.lineTo(x,-z):shape.moveTo(x,-z)});shape.closePath();const h=Math.max(5,Math.min(55,Number(way.tags?.["height"]?.replace(" m",""))||Number(way.tags?.["building:levels"])*3.2||10+Math.random()*13));const geo=new THREE.ExtrudeGeometry(shape,{depth:h,bevelEnabled:false});const mesh=new THREE.Mesh(geo,buildingMats[Math.floor(Math.random()*buildingMats.length)]);mesh.rotation.x=-Math.PI/2;mesh.position.set(center.x,.05,center.z);scene.add(mesh);const roof=new THREE.Mesh(new THREE.BoxGeometry(1,.15,1),mat(0x4a5961));roof.scale.set(1,1,1);roof.position.set(center.x,h+.05,center.z);roof.visible=false;scene.add(roof);}
+function addRoad(points,width=6){if(points.length<2)return;const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(p.x,.03,p.z)));const geo=new THREE.TubeGeometry(curve,Math.max(8,points.length*3),width/2,5,false);const mesh=new THREE.Mesh(geo,roadMat);mesh.userData.terrainRoad=true;scene.add(mesh);}
+function addBuilding(way){const coords=way.geometry;if(!coords||coords.length<4)return;const pts=coords.map(p=>project(p.lat,p.lon));const center=pts.reduce((a,p)=>({x:a.x+p.x/pts.length,z:a.z+p.z/pts.length}),{x:0,z:0});const shape=new THREE.Shape();pts.forEach((p,i)=>{const x=p.x-center.x,z=p.z-center.z;i?shape.lineTo(x,-z):shape.moveTo(x,-z)});shape.closePath();const h=Math.max(5,Math.min(55,Number(way.tags?.["height"]?.replace(" m",""))||Number(way.tags?.["building:levels"])*3.2||10+Math.random()*13));const geo=new THREE.ExtrudeGeometry(shape,{depth:h,bevelEnabled:false});const mesh=new THREE.Mesh(geo,buildingMats[Math.floor(Math.random()*buildingMats.length)]);mesh.rotation.x=-Math.PI/2;mesh.position.set(center.x,.05,center.z);mesh.userData.terrainBuilding=true;mesh.userData.terrainCenter={x:center.x,z:center.z};scene.add(mesh);const roof=new THREE.Mesh(new THREE.BoxGeometry(1,.15,1),mat(0x4a5961));roof.scale.set(1,1,1);roof.position.set(center.x,h+.05,center.z);roof.visible=false;scene.add(roof);}
 function addFallbackStreet(){for(let z=-360;z<=360;z+=65)addRoad([{x:-360,z},{x:360,z}],8);for(let x=-360;x<=360;x+=65)addRoad([{x,z:-360},{x,z:360}],8);for(let i=0;i<48;i++){const x=(Math.random()-.5)*560,z=(Math.random()-.5)*560;const w=12+Math.random()*22,d=12+Math.random()*24,h=8+Math.random()*28;const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),buildingMats[i%buildingMats.length]);b.position.set(x,h/2,z);scene.add(b);}}
 
+let terrainHeightGrid=null;
+const TERRAIN_SEGMENTS=128;
+function terrainHeightAt(x,z){
+ if(!terrainHeightGrid)return 0;
+ const u=Math.max(0,Math.min(1,(x+1200)/2400)),v=Math.max(0,Math.min(1,(1200-z)/2400));
+ const gx=u*TERRAIN_SEGMENTS,gz=v*TERRAIN_SEGMENTS,x0=Math.floor(gx),z0=Math.floor(gz),x1=Math.min(TERRAIN_SEGMENTS,x0+1),z1=Math.min(TERRAIN_SEGMENTS,z0+1),tx=gx-x0,tz=gz-z0;
+ const a=terrainHeightGrid[z0*(TERRAIN_SEGMENTS+1)+x0],b=terrainHeightGrid[z0*(TERRAIN_SEGMENTS+1)+x1],c=terrainHeightGrid[z1*(TERRAIN_SEGMENTS+1)+x0],d=terrainHeightGrid[z1*(TERRAIN_SEGMENTS+1)+x1];
+ return (a*(1-tx)+b*tx)*(1-tz)+(c*(1-tx)+d*tx)*tz-.42;
+}
+function conformMapToTerrain(){
+ if(!terrainHeightGrid)return;
+ scene.traverse(obj=>{
+  if(obj.userData.terrainRoad&&obj.geometry){
+   const p=obj.geometry.attributes.position;
+   for(let i=0;i<p.count;i++){p.setY(i,terrainHeightAt(p.getX(i),p.getZ(i))+.08);}
+   p.needsUpdate=true;obj.geometry.computeVertexNormals();
+  }else if(obj.userData.terrainBuilding){
+   const c=obj.userData.terrainCenter;obj.position.y=terrainHeightAt(c.x,c.z)+.05;
+  }
+ });
+}
 const DEM_ZOOM=15;
 function tileXY(lat,lon,z){const n=2**z,xt=(lon+180)/360*n,rad=lat*Math.PI/180,yt=(1-Math.asinh(Math.tan(rad))/Math.PI)/2*n;return {x:xt,y:yt};}
 function demElevation(r,g,b){const v=r*655.36+g*2.56+b*.01-10000;return v < -9999 ? 0 : v;}
@@ -39,13 +60,13 @@ async function loadTerrain(){
  await Promise.all(jobs);if(!tiles.size)throw new Error("No elevation tiles");
  const centerTile=tileXY(CENTER.lat,CENTER.lon,DEM_ZOOM),centerData=tiles.get(`${Math.floor(centerTile.x)}/${Math.floor(centerTile.y)}`);
  let baseElevation=0;if(centerData){const cx=Math.min(255,Math.floor((centerTile.x-Math.floor(centerTile.x))*256)),cy=Math.min(255,Math.floor((centerTile.y-Math.floor(centerTile.y))*256)),ci=(cy*centerData.width+cx)*4;baseElevation=demElevation(centerData.data[ci],centerData.data[ci+1],centerData.data[ci+2]);}
- const seg=128,geometry=new THREE.PlaneGeometry(2400,2400,seg,seg),pos=geometry.attributes.position;
+ const seg=TERRAIN_SEGMENTS,geometry=new THREE.PlaneGeometry(2400,2400,seg,seg),pos=geometry.attributes.position;terrainHeightGrid=new Float32Array(pos.count);
  for(let i=0;i<pos.count;i++){
   const u=(pos.getX(i)+1200)/2400,v=(1200-pos.getY(i))/2400;
   const lat=BBOX.north+(BBOX.south-BBOX.north)*v,lon=BBOX.west+(BBOX.east-BBOX.west)*u,t=tileXY(lat,lon,DEM_ZOOM);
   const tx=Math.floor(t.x),ty=Math.floor(t.y),tile=tiles.get(`${tx}/${ty}`);if(!tile)continue;
   const px=Math.max(0,Math.min(255,Math.floor((t.x-tx)*256))),py=Math.max(0,Math.min(255,Math.floor((t.y-ty)*256))),idx=(py*tile.width+px)*4;
-  const h=demElevation(tile.data[idx],tile.data[idx+1],tile.data[idx+2]);pos.setZ(i,Math.max(-20,Math.min(100,h-baseElevation)));
+  const h=demElevation(tile.data[idx],tile.data[idx+1],tile.data[idx+2]);const relative=Math.max(-20,Math.min(100,h-baseElevation));pos.setZ(i,relative);terrainHeightGrid[i]=relative;
  }
  geometry.computeVertexNormals();const terrain=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x81917c,roughness:1,side:THREE.DoubleSide}));terrain.rotation.x=-Math.PI/2;terrain.position.y=-.42;scene.add(terrain);ground.visible=false;grid.visible=false;
  return tiles.size;
