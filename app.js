@@ -9,7 +9,7 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x9bb8c7);
 const VIEW_DISTANCE=300;
 scene.fog=new THREE.Fog(0x9bb8c7,120,VIEW_DISTANCE);
-const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,VIEW_DISTANCE+40);
+const camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.1,VIEW_DISTANCE+40);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
@@ -22,7 +22,7 @@ const sun=new THREE.DirectionalLight(0xfff1d6,2.1);sun.position.set(-90,160,80);
 
 const mat=(color,roughness=1)=>new THREE.MeshStandardMaterial({color,roughness});
 const groundMat=mat(0x687b70),roadMat=mat(0x303941),sideMat=mat(0x9ba6a9),buildingMats=[mat(0x9aa8b1),mat(0x758895),mat(0xb2b8b5),mat(0x667985),mat(0xc1b9a8)];
-const ground=new THREE.Mesh(new THREE.PlaneGeometry(900,900),groundMat);ground.rotation.x=-Math.PI/2;ground.position.y=-.4;scene.add(ground);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000),groundMat);ground.rotation.x=-Math.PI/2;ground.position.y=-.8;scene.add(ground);
 const grid=new THREE.GridHelper(900,90,0x829b9f,0x829b9f);grid.position.y=-.38;grid.material.transparent=true;grid.material.opacity=.12;scene.add(grid);
 
 const metersLon= Math.cos(CENTER.lat*Math.PI/180)*111320;
@@ -115,7 +115,7 @@ async function loadTerrain(){
   const px=Math.max(0,Math.min(255,Math.floor((t.x-tx)*256))),py=Math.max(0,Math.min(255,Math.floor((t.y-ty)*256))),idx=(py*tile.width+px)*4;
   const h=demElevation(tile.data[idx],tile.data[idx+1],tile.data[idx+2]);const relative=Math.max(-20,Math.min(100,h-baseElevation));pos.setZ(i,relative);terrainHeightGrid[i]=relative;
  }
- geometry.computeVertexNormals();const terrain=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x81917c,roughness:1,side:THREE.DoubleSide}));terrain.rotation.x=-Math.PI/2;terrain.position.y=-.42;scene.add(terrain);ground.visible=false;grid.visible=false;conformMapToTerrain();
+ geometry.computeVertexNormals();const terrain=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x81917c,roughness:1,side:THREE.DoubleSide}));terrain.rotation.x=-Math.PI/2;terrain.position.y=-.42;scene.add(terrain);ground.visible=true;grid.visible=false;conformMapToTerrain();
  return tiles.size;
 }
 
@@ -128,21 +128,21 @@ function pointInPolygon(x,z,poly){let inside=false;for(let i=0,j=poly.length-1;i
 function distanceToSegment(px,pz,a,b){const dx=b.x-a.x,dz=b.z-a.z,l2=dx*dx+dz*dz;if(!l2)return Math.hypot(px-a.x,pz-a.z);const t=Math.max(0,Math.min(1,((px-a.x)*dx+(pz-a.z)*dz)/l2));return Math.hypot(px-(a.x+t*dx),pz-(a.z+t*dz));}
 function canOccupy(x,z){const radius=.62;for(const poly of buildingFootprints){if(pointInPolygon(x,z,poly))return false;for(let i=0;i<poly.length;i++){if(distanceToSegment(x,z,poly[i],poly[(i+1)%poly.length])<radius)return false;}}return true;}
 function movePlayerToSafeSpawn(){if(canOccupy(0,0)){player.position.set(0,terrainHeightAt(0,0),0);return;}for(let radius=8;radius<=180;radius+=8){for(let angle=0;angle<Math.PI*2;angle+=Math.PI/8){const x=Math.cos(angle)*radius,z=Math.sin(angle)*radius;if(canOccupy(x,z)){player.position.set(x,terrainHeightAt(x,z),z);return;}}}player.position.set(0,0,80);}
-let yaw=0,pitch=.25,moveX=0,moveZ=0,running=false,jumpV=0,onGround=true;const camOffset=new THREE.Vector3(0,5.2,10);
-function updateCamera(){const dist=running?9:8;const target=new THREE.Vector3(player.position.x,player.position.y+1.3,player.position.z);const offset=new THREE.Vector3(Math.sin(yaw)*dist,3.2+pitch*5,Math.cos(yaw)*dist);camera.position.copy(target).add(offset);camera.lookAt(target);}
+let yaw=0,pitch=.32,moveX=0,moveZ=0,running=false,jumpV=0,onGround=true;const camOffset=new THREE.Vector3(0,5.2,10);
+function updateCamera(){const dist=running?9:8;const target=new THREE.Vector3(player.position.x,player.position.y+1.45,player.position.z);const horizontal=Math.cos(pitch)*dist;const offset=new THREE.Vector3(Math.sin(yaw)*horizontal,Math.sin(pitch)*dist,Math.cos(yaw)*horizontal);camera.position.copy(target).add(offset);camera.lookAt(target);}
 updateCamera();
 const joy=document.querySelector("#joystick"),stick=document.querySelector("#stick");let joyPointer=null;
 function setStick(e){const r=joy.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),max=34,len=Math.hypot(dx,dy),k=len>max?max/len:1;const x=dx*k,y=dy*k;stick.style.left=`calc(50% + ${x}px)`;stick.style.top=`calc(50% + ${y}px)`;moveX=x/max;moveZ=y/max;}
 joy.addEventListener("pointerdown",e=>{joyPointer=e.pointerId;joy.setPointerCapture(e.pointerId);setStick(e);});joy.addEventListener("pointermove",e=>{if(e.pointerId===joyPointer)setStick(e);});function releaseJoy(){joyPointer=null;moveX=moveZ=0;stick.style.left="50%";stick.style.top="50%";}joy.addEventListener("pointerup",releaseJoy);joy.addEventListener("pointercancel",releaseJoy);
-let lookPointer=null,lastX=0,lastY=0;renderer.domElement.addEventListener("pointerdown",e=>{if(e.clientX<innerWidth*.3&&e.clientY>innerHeight*.55)return;lookPointer=e.pointerId;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});renderer.domElement.addEventListener("pointermove",e=>{if(e.pointerId!==lookPointer)return;yaw+=(e.clientX-lastX)*.006;pitch=Math.max(-.12,Math.min(.65,pitch+(e.clientY-lastY)*.003));lastX=e.clientX;lastY=e.clientY;});renderer.domElement.addEventListener("pointerup",()=>lookPointer=null);renderer.domElement.addEventListener("pointercancel",()=>lookPointer=null);
+let lookPointer=null,lastX=0,lastY=0;renderer.domElement.addEventListener("pointerdown",e=>{if(e.clientX<innerWidth*.3&&e.clientY>innerHeight*.55)return;lookPointer=e.pointerId;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});renderer.domElement.addEventListener("pointermove",e=>{if(e.pointerId!==lookPointer)return;yaw+=(e.clientX-lastX)*.006;pitch=Math.max(-.18,Math.min(1.05,pitch-(e.clientY-lastY)*.005));lastX=e.clientX;lastY=e.clientY;});renderer.domElement.addEventListener("pointerup",()=>lookPointer=null);renderer.domElement.addEventListener("pointercancel",()=>lookPointer=null);
 document.querySelector("#run").addEventListener("pointerdown",()=>running=true);["pointerup","pointercancel","pointerleave"].forEach(ev=>document.querySelector("#run").addEventListener(ev,()=>running=false));document.querySelector("#jump").addEventListener("pointerdown",()=>{if(onGround){jumpV=6;onGround=false;}});
-document.querySelector("#reset-camera").addEventListener("click",()=>{yaw=0;pitch=.25;});
+document.querySelector("#reset-camera").addEventListener("click",()=>{yaw=0;pitch=.32;});
 const clock=new THREE.Clock();function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));const dir=forward.multiplyScalar(-moveZ).add(right.multiplyScalar(moveX));if(dir.lengthSq()>1)dir.normalize();const speed=running?9:4.2;const stepX=dir.x*speed*dt,stepZ=dir.z*speed*dt;
  const nextX=player.position.x+stepX,nextZ=player.position.z+stepZ;
  if(canOccupy(nextX,player.position.z))player.position.x=nextX;
  if(canOccupy(player.position.x,nextZ))player.position.z=nextZ;
  player.position.y=terrainHeightAt(player.position.x,player.position.z);
- if(dir.lengthSq()>.001)player.rotation.y=Math.atan2(dir.x,dir.z);jumpV-=15*dt;player.position.y+=jumpV*dt;if(player.position.y<=0){player.position.y=0;jumpV=0;onGround=true;}updateCamera();renderer.render(scene,camera);}
+ if(dir.lengthSq()>.001)player.rotation.y=Math.atan2(dir.x,dir.z);jumpV-=15*dt;player.position.y+=jumpV*dt;if(player.position.y<=terrainHeightAt(player.position.x,player.position.z)){player.position.y=terrainHeightAt(player.position.x,player.position.z);jumpV=0;onGround=true;}updateCamera();renderer.render(scene,camera);}
 animate();
 addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);});
 (async()=>{try{loadingText.textContent="OpenStreetMapから札幌の道路・建物を取得中...";const result=await loadOSM();let demCount=0;try{demCount=await loadTerrain();}catch(demError){console.warn("標高データを読み込めませんでした",demError);}movePlayerToSafeSpawn();statusEl.textContent=`道路 ${result.roads} / 建物 ${result.buildings} / 標高タイル ${demCount}`;document.querySelector("#coords").textContent="札幌駅周辺";}catch(e){console.warn(e);addFallbackStreet();movePlayerToSafeSpawn();statusEl.textContent="簡易マップ表示（地図データ未取得）";document.querySelector("#coords").textContent="札幌中心部・簡易表示";}finally{document.querySelector("#loading").classList.add("hidden");}})();
