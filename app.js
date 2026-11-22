@@ -45,19 +45,20 @@ function addRoad(points,width=6){if(points.length<2)return;const curve=new THREE
  for(const p of [points[0],points[points.length-1]]){const key=Math.round(p.x/8)+","+Math.round(p.z/8);roadEndpointCounts.set(key,(roadEndpointCounts.get(key)||0)+1);}
  addRoadsideProps(points,width);
 }
+function markTerrainProp(mesh,x,z,offset){mesh.userData.terrainProp={x,z,offset};}
 function addStreetLight(x,z){
- const y=terrainHeightAt(x,z);const pole=new THREE.Mesh(propGeometry.pole,propMaterials.metal);pole.position.set(x,y+2.4,z);scene.add(pole);
- const arm=new THREE.Mesh(new THREE.BoxGeometry(.9,.09,.09),propMaterials.metal);arm.position.set(x+.38,y+4.65,z);scene.add(arm);
- const lamp=new THREE.Mesh(propGeometry.lamp,propMaterials.lamp);lamp.scale.set(1.25,.45,.7);lamp.position.set(x+.78,y+4.58,z);scene.add(lamp);
+ const y=terrainHeightAt(x,z);const pole=new THREE.Mesh(propGeometry.pole,propMaterials.metal);pole.position.set(x,y+2.4,z);markTerrainProp(pole,x,z,2.4);scene.add(pole);
+ const arm=new THREE.Mesh(new THREE.BoxGeometry(.9,.09,.09),propMaterials.metal);arm.position.set(x+.38,y+4.65,z);markTerrainProp(arm,x,z,4.65);scene.add(arm);
+ const lamp=new THREE.Mesh(propGeometry.lamp,propMaterials.lamp);lamp.scale.set(1.25,.45,.7);lamp.position.set(x+.78,y+4.58,z);markTerrainProp(lamp,x,z,4.58);scene.add(lamp);
 }
 function addTree(x,z,scale=1){
- const y=terrainHeightAt(x,z);const trunk=new THREE.Mesh(propGeometry.trunk,propMaterials.trunk);trunk.scale.set(scale,scale,scale);trunk.position.set(x,y+1.05*scale,z);scene.add(trunk);
- const crown=new THREE.Mesh(propGeometry.crown,propMaterials.leaves[Math.floor(Math.random()*3)]);crown.scale.set(1.05*scale,1.35*scale,1.05*scale);crown.position.set(x,y+2.45*scale,z);scene.add(crown);
+ const y=terrainHeightAt(x,z);const trunk=new THREE.Mesh(propGeometry.trunk,propMaterials.trunk);trunk.scale.set(scale,scale,scale);trunk.position.set(x,y+1.05*scale,z);markTerrainProp(trunk,x,z,1.05*scale);scene.add(trunk);
+ const crown=new THREE.Mesh(propGeometry.crown,propMaterials.leaves[Math.floor(Math.random()*3)]);crown.scale.set(1.05*scale,1.35*scale,1.05*scale);crown.position.set(x,y+2.45*scale,z);markTerrainProp(crown,x,z,2.45*scale);scene.add(crown);
 }
 function addTrafficSignal(x,z){
- const y=terrainHeightAt(x,z);const pole=new THREE.Mesh(propGeometry.signalPole,propMaterials.metal);pole.position.set(x,y+2.05,z);scene.add(pole);
- const box=new THREE.Mesh(propGeometry.signalBox,propMaterials.signal);box.position.set(x+.25,y+3.45,z);scene.add(box);
- for(let i=0;i<3;i++){const lamp=new THREE.Mesh(new THREE.SphereGeometry(.115,8,6),[propMaterials.red,propMaterials.yellow,propMaterials.green][i]);lamp.position.set(x+.25,y+3.78-i*.31,z+.2);scene.add(lamp);}
+ const y=terrainHeightAt(x,z);const pole=new THREE.Mesh(propGeometry.signalPole,propMaterials.metal);pole.position.set(x,y+2.05,z);markTerrainProp(pole,x,z,2.05);scene.add(pole);
+ const box=new THREE.Mesh(propGeometry.signalBox,propMaterials.signal);box.position.set(x+.25,y+3.45,z);markTerrainProp(box,x,z,3.45);scene.add(box);
+ for(let i=0;i<3;i++){const lamp=new THREE.Mesh(new THREE.SphereGeometry(.115,8,6),[propMaterials.red,propMaterials.yellow,propMaterials.green][i]);lamp.position.set(x+.25,y+3.78-i*.31,z+.2);markTerrainProp(lamp,x,z,3.78-i*.31);scene.add(lamp);}
 }
 function addRoadsideProps(points,width){
  let distance=0,nextLight=48,nextTree=27;
@@ -90,6 +91,8 @@ function conformMapToTerrain(){
    p.needsUpdate=true;obj.geometry.computeVertexNormals();
   }else if(obj.userData.terrainBuilding){
    const c=obj.userData.terrainCenter;obj.position.y=terrainHeightAt(c.x,c.z)+.05;
+  }else if(obj.userData.terrainProp){
+   const p=obj.userData.terrainProp;obj.position.y=terrainHeightAt(p.x,p.z)+p.offset;
   }
  });
 }
