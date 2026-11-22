@@ -37,13 +37,15 @@ async function loadTerrain(){
  const a=tileXY(BBOX.north,BBOX.west,DEM_ZOOM),b=tileXY(BBOX.south,BBOX.east,DEM_ZOOM),tiles=new Map(),jobs=[];
  for(let x=Math.floor(a.x);x<=Math.floor(b.x);x++)for(let y=Math.floor(a.y);y<=Math.floor(b.y);y++)jobs.push((async()=>{try{tiles.set(`${x}/${y}`,await loadDemTile(x,y));}catch(e){}})());
  await Promise.all(jobs);if(!tiles.size)throw new Error("No elevation tiles");
+ const centerTile=tileXY(CENTER.lat,CENTER.lon,DEM_ZOOM),centerData=tiles.get(`${Math.floor(centerTile.x)}/${Math.floor(centerTile.y)}`);
+ let baseElevation=0;if(centerData){const cx=Math.min(255,Math.floor((centerTile.x-Math.floor(centerTile.x))*256)),cy=Math.min(255,Math.floor((centerTile.y-Math.floor(centerTile.y))*256)),ci=(cy*centerData.width+cx)*4;baseElevation=demElevation(centerData.data[ci],centerData.data[ci+1],centerData.data[ci+2]);}
  const seg=128,geometry=new THREE.PlaneGeometry(2400,2400,seg,seg),pos=geometry.attributes.position;
  for(let i=0;i<pos.count;i++){
   const u=(pos.getX(i)+1200)/2400,v=(1200-pos.getY(i))/2400;
   const lat=BBOX.north+(BBOX.south-BBOX.north)*v,lon=BBOX.west+(BBOX.east-BBOX.west)*u,t=tileXY(lat,lon,DEM_ZOOM);
   const tx=Math.floor(t.x),ty=Math.floor(t.y),tile=tiles.get(`${tx}/${ty}`);if(!tile)continue;
   const px=Math.max(0,Math.min(255,Math.floor((t.x-tx)*256))),py=Math.max(0,Math.min(255,Math.floor((t.y-ty)*256))),idx=(py*tile.width+px)*4;
-  const h=demElevation(tile.data[idx],tile.data[idx+1],tile.data[idx+2]);pos.setZ(i,Math.max(-5,Math.min(150,h)));
+  const h=demElevation(tile.data[idx],tile.data[idx+1],tile.data[idx+2]);pos.setZ(i,Math.max(-20,Math.min(100,h-baseElevation)));
  }
  geometry.computeVertexNormals();const terrain=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x81917c,roughness:1,side:THREE.DoubleSide}));terrain.rotation.x=-Math.PI/2;terrain.position.y=-.42;scene.add(terrain);ground.visible=false;grid.visible=false;
  return tiles.size;
