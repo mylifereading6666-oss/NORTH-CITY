@@ -33,7 +33,7 @@ let terrainHeightGrid=null;
 const TERRAIN_SEGMENTS=128;
 function terrainHeightAt(x,z){
  if(!terrainHeightGrid)return 0;
- const u=Math.max(0,Math.min(1,(x+1200)/2400)),v=Math.max(0,Math.min(1,(1200-z)/2400));
+ const u=Math.max(0,Math.min(1,(x+1200)/2400)),v=Math.max(0,Math.min(1,(z+1200)/2400));
  const gx=u*TERRAIN_SEGMENTS,gz=v*TERRAIN_SEGMENTS,x0=Math.floor(gx),z0=Math.floor(gz),x1=Math.min(TERRAIN_SEGMENTS,x0+1),z1=Math.min(TERRAIN_SEGMENTS,z0+1),tx=gx-x0,tz=gz-z0;
  const a=terrainHeightGrid[z0*(TERRAIN_SEGMENTS+1)+x0],b=terrainHeightGrid[z0*(TERRAIN_SEGMENTS+1)+x1],c=terrainHeightGrid[z1*(TERRAIN_SEGMENTS+1)+x0],d=terrainHeightGrid[z1*(TERRAIN_SEGMENTS+1)+x1];
  return (a*(1-tx)+b*tx)*(1-tz)+(c*(1-tx)+d*tx)*tz-.42;
