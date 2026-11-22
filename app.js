@@ -42,7 +42,7 @@ const propMaterials={
  signal:mat(0x202a30),red:mat(0xe64a43),yellow:mat(0xe8bd43),green:mat(0x55b978)
 };
 function project(lat,lon){return {x:(lon-CENTER.lon)*metersLon,z:-(lat-CENTER.lat)*111320};}
-function addRoad(points,width=6){if(points.length<2)return;const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(p.x,.03,p.z)));const geo=new THREE.TubeGeometry(curve,Math.max(8,points.length*3),width/2,5,false);const mesh=new THREE.Mesh(geo,roadMat);mesh.userData.terrainRoad=true;scene.add(mesh);
+function addRoad(points,width=6){if(points.length<2)return;const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(p.x,0,p.z)));const samples=curve.getPoints(Math.max(8,points.length*8));const vertices=[],indices=[];for(let i=0;i<samples.length;i++){const prev=samples[Math.max(0,i-1)],next=samples[Math.min(samples.length-1,i+1)];const dx=next.x-prev.x,dz=next.z-prev.z,len=Math.hypot(dx,dz)||1,nx=-dz/len,nz=dx/len,p=samples[i];vertices.push(p.x+nx*width/2,.03,p.z+nz*width/2,p.x-nx*width/2,.03,p.z-nz*width/2);if(i<samples.length-1){const a=i*2,b=a+1,c=a+2,d=a+3;indices.push(a,b,c,b,d,c);}}const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));geo.setIndex(indices);geo.computeVertexNormals();const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x303941,roughness:.96,side:THREE.DoubleSide}));mesh.userData.terrainRoad=true;scene.add(mesh);
  for(const p of [points[0],points[points.length-1]]){const key=Math.round(p.x/8)+","+Math.round(p.z/8);roadEndpointCounts.set(key,(roadEndpointCounts.get(key)||0)+1);}
  addRoadsideProps(points,width);
 }
@@ -125,7 +125,9 @@ async function loadOSM(){const q=`[out:json][timeout:20];(way["highway"](${BBOX.
 const player=new THREE.Group();const body=new THREE.Mesh(new THREE.CapsuleGeometry(.48,.9,4,8),mat(0x18232c));body.position.y=1.15;player.add(body);const head=new THREE.Mesh(new THREE.SphereGeometry(.29,12,10),mat(0xc99b7b));head.position.y=1.95;player.add(head);const hair=new THREE.Mesh(new THREE.SphereGeometry(.3,12,8),mat(0x17191d));hair.scale.set(1, .55,1);hair.position.y=2.13;player.add(hair);const legMat=mat(0x111820);for(const x of [-.2,.2]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.19,.7,.22),legMat);leg.position.set(x,.45,0);player.add(leg);}scene.add(player);player.position.set(0,0,0);
 
 function pointInPolygon(x,z,poly){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a.z>z)!==(b.z>z))&&(x<(b.x-a.x)*(z-a.z)/(b.z-a.z)+a.x))inside=!inside;}return inside;}
-function canOccupy(x,z){for(const poly of buildingFootprints){if(pointInPolygon(x,z,poly))return false;}return true;}
+function distanceToSegment(px,pz,a,b){const dx=b.x-a.x,dz=b.z-a.z,l2=dx*dx+dz*dz;if(!l2)return Math.hypot(px-a.x,pz-a.z);const t=Math.max(0,Math.min(1,((px-a.x)*dx+(pz-a.z)*dz)/l2));return Math.hypot(px-(a.x+t*dx),pz-(a.z+t*dz));}
+function canOccupy(x,z){const radius=.62;for(const poly of buildingFootprints){if(pointInPolygon(x,z,poly))return false;for(let i=0;i<poly.length;i++){if(distanceToSegment(x,z,poly[i],poly[(i+1)%poly.length])<radius)return false;}}return true;}
+function movePlayerToSafeSpawn(){if(canOccupy(0,0)){player.position.set(0,terrainHeightAt(0,0),0);return;}for(let radius=8;radius<=180;radius+=8){for(let angle=0;angle<Math.PI*2;angle+=Math.PI/8){const x=Math.cos(angle)*radius,z=Math.sin(angle)*radius;if(canOccupy(x,z)){player.position.set(x,terrainHeightAt(x,z),z);return;}}}player.position.set(0,0,80);}
 let yaw=0,pitch=.25,moveX=0,moveZ=0,running=false,jumpV=0,onGround=true;const camOffset=new THREE.Vector3(0,5.2,10);
 function updateCamera(){const dist=running?9:8;const target=new THREE.Vector3(player.position.x,player.position.y+1.3,player.position.z);const offset=new THREE.Vector3(Math.sin(yaw)*dist,3.2+pitch*5,Math.cos(yaw)*dist);camera.position.copy(target).add(offset);camera.lookAt(target);}
 updateCamera();
@@ -139,7 +141,8 @@ const clock=new THREE.Clock();function animate(){requestAnimationFrame(animate);
  const nextX=player.position.x+stepX,nextZ=player.position.z+stepZ;
  if(canOccupy(nextX,player.position.z))player.position.x=nextX;
  if(canOccupy(player.position.x,nextZ))player.position.z=nextZ;
+ player.position.y=terrainHeightAt(player.position.x,player.position.z);
  if(dir.lengthSq()>.001)player.rotation.y=Math.atan2(dir.x,dir.z);jumpV-=15*dt;player.position.y+=jumpV*dt;if(player.position.y<=0){player.position.y=0;jumpV=0;onGround=true;}updateCamera();renderer.render(scene,camera);}
 animate();
 addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);});
-(async()=>{try{loadingText.textContent="OpenStreetMapから札幌の道路・建物を取得中...";const result=await loadOSM();let demCount=0;try{demCount=await loadTerrain();}catch(demError){console.warn("標高データを読み込めませんでした",demError);}statusEl.textContent=`道路 ${result.roads} / 建物 ${result.buildings} / 標高タイル ${demCount}`;document.querySelector("#coords").textContent="札幌駅周辺";}catch(e){console.warn(e);addFallbackStreet();statusEl.textContent="簡易マップ表示（地図データ未取得）";document.querySelector("#coords").textContent="札幌中心部・簡易表示";}finally{document.querySelector("#loading").classList.add("hidden");}})();
+(async()=>{try{loadingText.textContent="OpenStreetMapから札幌の道路・建物を取得中...";const result=await loadOSM();let demCount=0;try{demCount=await loadTerrain();}catch(demError){console.warn("標高データを読み込めませんでした",demError);}movePlayerToSafeSpawn();statusEl.textContent=`道路 ${result.roads} / 建物 ${result.buildings} / 標高タイル ${demCount}`;document.querySelector("#coords").textContent="札幌駅周辺";}catch(e){console.warn(e);addFallbackStreet();movePlayerToSafeSpawn();statusEl.textContent="簡易マップ表示（地図データ未取得）";document.querySelector("#coords").textContent="札幌中心部・簡易表示";}finally{document.querySelector("#loading").classList.add("hidden");}})();
